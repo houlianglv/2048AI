@@ -27,6 +27,7 @@ class PlayerAI(BaseAI):
                            [0.102812, 0.076711, 0.037116, 0.00575871],
                            [0.121925, 0.0888405, 0.0562579, 0.00992495],
                            [0.135759, 0.09997992, 0.060654, 0.0125498]]]
+        self.time_limit = None
 
     @staticmethod
     def get_available_grid_cells(grid):
@@ -50,25 +51,25 @@ class PlayerAI(BaseAI):
         return 0 <= position[0] < grid.size and 0 <= position[1] < grid.size
 
     def getMove(self, grid):
-        return self.iterative_deepening(grid)
-
-    def iterative_deepening(self, grid):
-        # timelimit = time.time() + 0.98
+        # iterative_deepening with time limitation
+        self.time_limit = time.time() + 0.98
         best_move = -1
-        # empty_cells = len(self.get_available_grid_cells(grid))
-        # depth = 4
-        for i in [4, 5, 6]:
-            move_score = self.search(grid, -infinity, infinity, i, True)
-            # if move_score.direction is -1:
-            #     break
-            # else:
+        depth = 4
+        while time.time() < self.time_limit:
+            move_score = self.search(grid, -infinity, infinity, depth, True)
+            if move_score.direction is -1:
+                break
             best_move = move_score.direction
+            depth += 1
+            
         if best_move is -1:
             raise Exception("No move is provided!")
         return best_move
 
     def search(self, grid, alpha, beta, depth, player):
         # check the depth
+        if time.time() >= self.time_limit:
+            return MoveScore(-1, None)
         if depth is 0:
             return MoveScore(-1, self.eval(grid))
         if player:
@@ -91,6 +92,9 @@ class PlayerAI(BaseAI):
                     continue
                 # min_value returns a instance of MoveScore
                 move_score = self.search(new_grid, alpha, beta, depth - 1, False)
+                # check if the time limit is reached
+                if move_score.score is None:
+                    return move_score
                 if move_score.score > v:
                     v = move_score.score
                     move = direction
@@ -99,7 +103,7 @@ class PlayerAI(BaseAI):
                 if v > alpha:
                     alpha = v
             else:
-                # cannot move:
+                # when you cannot move:
                 blocked_directions += 1
         if blocked_directions is 4:
             return MoveScore(-1, self.eval(grid))
@@ -115,7 +119,7 @@ class PlayerAI(BaseAI):
                 scores[key].append(None)
                 grid.insertTile(position, key)
                 # evaluate the score
-                scores[key][idx] = self.weight_score(grid)
+                scores[key][idx] = self.eval(grid)
                 grid.insertTile(position, 0)
         # now just pick out the most annoying moves
         candidates = []
@@ -131,6 +135,9 @@ class PlayerAI(BaseAI):
             new_grid = grid.clone()
             new_grid.insertTile(position, value)
             move_score = self.search(new_grid, alpha, beta, depth - 1, True)
+            # check if time limit is reached
+            if move_score.score is None:
+                return move_score
             if move_score.score < v:
                 v = move_score.score
             if v <= alpha:
@@ -139,9 +146,6 @@ class PlayerAI(BaseAI):
         return MoveScore(-1, v)
 
     def eval(self, grid):
-        return self.weight_score(grid)
-
-    def weight_score(self, grid):
         max_score = None
         for weight_matrix in self.gradients:
             score = 0.0
