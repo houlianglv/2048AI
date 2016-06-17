@@ -4,7 +4,6 @@
 from BaseAI import BaseAI
 import Grid
 import time
-import math
 
 infinity = 1.0e400
 
@@ -76,23 +75,6 @@ class PlayerAI(BaseAI):
     def within_bounds(grid, position):
         return 0 <= position[0] < grid.size and 0 <= position[1] < grid.size
 
-    def getMove(self, grid):
-        best_move = -1
-        # iterative_deepening with time limitation
-        self.time_limit = time.time() + 0.98
-
-        depth = 4
-        while time.time() < self.time_limit:
-            move_score = self.search(grid, -infinity, infinity, depth, True)
-            if move_score.direction is -1:
-                break
-            best_move = move_score.direction
-            depth += 1
-
-        if best_move is -1:
-            raise Exception("No move is provided!")
-        return best_move
-
     def update_max_tile(self, grid):
         if self.current_max_tile >= self.threshold:
             return
@@ -103,99 +85,83 @@ class PlayerAI(BaseAI):
                         self.current_max_tile = grid.map[x][y]
                         return
 
-    def search(self, grid, alpha, beta, depth, player):
-        # check the depth
+    def getMove(self, grid):
+        best_move = -1
+        # iterative_deepening with time limitation
+        self.time_limit = time.time() + 0.98
+
+        depth = 4
+        while time.time() < self.time_limit:
+            move_score = self.alpha_beta(grid, depth, -infinity, infinity, True)
+            if move_score.direction is -1:
+                break
+            best_move = move_score.direction
+            depth += 1
+
+        if best_move is -1:
+            raise Exception("No move is provided!")
+        return best_move
+
+    def alpha_beta(self, grid, depth, alpha, beta, player):
         if time.time() >= self.time_limit:
             return MoveScore(-1, None)
-        if depth is 0:
-            return MoveScore(-1, self.eval(grid))
         if player:
-            return self.max_value(grid, alpha, beta, depth)
-        else:
-            return self.min_value(grid, alpha, beta, depth)
-
-    def max_value(self, grid, alpha, beta, depth):
-        v = -infinity
-        move = -1
-        blocked_directions = 0
-        for direction in range(4):
-            new_grid = grid.clone()
-            if new_grid.move(direction):
+            children = []
+            for i in range(4):
+                new_grid = grid.clone()
+                if new_grid.move(i):
+                    children.append((i, new_grid))
+            if len(children) is 0:
+                # when player cannot move
+                return MoveScore(-1, self.eval(grid))
+            new_alpha = alpha
+            best_move = -1
+            for child in children:
+                direction = child[0]
+                child_grid = child[1]
                 if depth is 0:
-                    score = self.eval(grid)
-                    if score > v:
-                        v = score
-                        move = direction
-                    continue
-                # min_value returns a instance of MoveScore
-                move_score = self.search(new_grid, alpha, beta, depth - 1, False)
-                # check if the time limit is reached
+                    # if the depth is 0, evaluate the current board
+                    move_score = MoveScore(-1, self.eval(grid))
+                else:
+                    move_score = self.alpha_beta(child_grid, depth - 1, new_alpha, beta, False)
                 if move_score.score is None:
+                    # when reach the time limitation
                     return move_score
-                if move_score.score > v:
-                    v = move_score.score
-                    move = direction
-                if v >= beta:
-                    return MoveScore(direction, v, cutoff=True)
-                if v > alpha:
-                    alpha = v
-            else:
-                # when you cannot move:
-                blocked_directions += 1
-        if blocked_directions is 4:
-            return MoveScore(-1, self.eval(grid))
+                if move_score.score > new_alpha:
+                    new_alpha = move_score.score
+                    best_move = direction
+                if new_alpha >= beta:
+                    break
+            return MoveScore(best_move, new_alpha)
         else:
-            return MoveScore(move, v)
-
-    def min_value(self, grid, alpha, beta, depth):
-        v = infinity
-        cells = self.get_available_grid_cells(grid)
-        scores = {2: [], 4: []}
-        for key, value in scores.iteritems():
-            for idx, position in enumerate(cells):
-                scores[key].append(None)
-                grid.insertTile(position, key)
-                # evaluate the score
-                scores[key][idx] = self.eval(grid)
-                grid.insertTile(position, 0)
-        # now just pick out the most annoying moves
-        candidates = []
-        min_score = min([min(scores[2]), min(scores[4])])
-        for key, value in scores.iteritems():
-            for idx, score in enumerate(value):
-                if min_score == score:
-                    candidates.append({"position": cells[idx], "tileValue": key})
-        # search on each candidate
-        for candidate in candidates:
-            position = candidate["position"]
-            value = candidate["tileValue"]
-            new_grid = grid.clone()
-            new_grid.insertTile(position, value)
-            move_score = self.search(new_grid, alpha, beta, depth - 1, True)
-            # check if time limit is reached
-            if move_score.score is None:
-                return move_score
-            if move_score.score < v:
-                v = move_score.score
-            if v <= alpha:
-                return MoveScore(-1, v, True)
-            beta = min([beta, v])
-        return MoveScore(-1, v)
+            empty_cells = self.get_available_grid_cells(grid)
+            new_beta = beta
+            for cell in empty_cells:
+                # insert 2
+                grid.insertTile(cell, 2)
+                if depth is 0:
+                    # when depth is 0, eval the current board
+                    new_beta = self.eval(grid)
+                else:
+                    new_beta = min(new_beta, self.alpha_beta(grid, depth - 1, alpha, new_beta, True).score)
+                grid.insertTile(cell, 0)
+                if new_beta <= alpha:
+                    return MoveScore(-1, new_beta)
+            for cell in empty_cells:
+                # insert 4
+                grid.insertTile(cell, 4)
+                if depth is 0:
+                    # when depth is 0, eval the current board
+                    new_beta = self.eval(grid)
+                else:
+                    new_beta = min(new_beta, self.alpha_beta(grid, depth - 1, alpha, new_beta, True).score)
+                grid.insertTile(cell, 0)
+                if new_beta <= alpha:
+                    return MoveScore(-1, new_beta)
+            return MoveScore(-1, new_beta)
 
     def eval(self, grid):
-        # return self.weight_score(grid)
         return self.snake_weight_score(grid)
-
-    def weight_score(self, grid):
-        max_score = None
-        for weight_matrix in self.gradients:
-            score = 0.0
-            for x in range(4):
-                for y in range(4):
-                    score += grid.map[x][y] * weight_matrix[x][y]
-            if score > max_score:
-                max_score = score
-        return max_score
 
     def snake_weight_score(self, grid):
         max_score = None
@@ -208,18 +174,6 @@ class PlayerAI(BaseAI):
             if score > max_score:
                 max_score = score
         return max_score
-
-    def one_move_direction(self, grid):
-        best = -1
-        best_score = None
-        for direction in range(4):
-            new_grid = grid.clone()
-            new_grid.move(direction)
-            score = self.eval(new_grid)
-            if score > best_score:
-                best_score = score
-                best = direction
-        return best
 
 
 class MoveScore:
