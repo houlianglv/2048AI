@@ -11,23 +11,41 @@ infinity = 1.0e400
 class PlayerAI(BaseAI):
     def __init__(self):
         self.directionVectors = ((-1, 0), (1, 0), (0, -1), (0, 1))  # UP DOWN LEFT RIGHT
-        self.gradients = [[[0.135759, 0.121925, 0.102812, 0.099937],
-                           [0.09997992, 0.0888405, 0.076711, 0.0724143],
-                           [0.060654, 0.0562579, 0.037116, 0.0161889],
-                           [0.0125498, 0.00992495, 0.00575871, 0.00335193]],
-                          [[0.0125498, 0.060654, 0.09997992, 0.135759],
-                           [0.00992495, 0.0562579, 0.0888405, 0.121925],
-                           [0.00575871, 0.037116, 0.076711, 0.102812],
-                           [0.00335193, 0.0161889, 0.0724143, 0.099937]],
-                          [[0.00335193, 0.00575871, 0.00992495, 0.0125498],
-                           [0.0161889, 0.037116, 0.0562579, 0.060654],
-                           [0.0724143, 0.076711, 0.0888405, 0.09997992],
-                           [0.099937, 0.102812, 0.121925, 0.135759]],
-                          [[0.099937, 0.0724143, 0.0161889, 0.00335193],
-                           [0.102812, 0.076711, 0.037116, 0.00575871],
-                           [0.121925, 0.0888405, 0.0562579, 0.00992495],
-                           [0.135759, 0.09997992, 0.060654, 0.0125498]]]
         self.time_limit = None
+        self.current_max_tile = None
+        self.threshold = 256
+        self.snakes = [[[15, 14, 13, 12],
+                       [8, 9, 10, 11],
+                       [4, 5, 6, 7],
+                       [3, 2, 1, 0]],
+                       [[12, 13, 14, 15],
+                       [11, 10, 9, 8],
+                       [4, 5, 6, 7],
+                       [3, 2, 1, 0]],
+                       [[3, 4, 8, 15],
+                       [2, 5, 9, 14],
+                       [1, 6, 10, 13],
+                       [0, 7, 11, 12]],
+                       [[3, 4, 11, 12],
+                       [2, 5, 10, 13],
+                       [1, 6, 9, 14],
+                       [0, 7, 8, 15]],
+                       [[0, 1, 2, 3],
+                       [7, 6, 5, 4],
+                       [8, 9, 10, 11],
+                       [15, 14, 13, 12]],
+                       [[0, 1, 2, 3],
+                       [7, 6, 5, 4],
+                       [11, 10, 9, 8],
+                       [12, 13, 14, 15]],
+                       [[12, 11, 7, 0],
+                       [13, 10, 6, 1],
+                       [14, 9, 5, 2],
+                       [15, 8, 4, 3]],
+                       [[15, 8, 7, 0],
+                       [14, 9, 6, 1],
+                       [13, 10, 5, 2],
+                       [12, 11, 4, 3]]]
 
     @staticmethod
     def get_available_grid_cells(grid):
@@ -51,9 +69,10 @@ class PlayerAI(BaseAI):
         return 0 <= position[0] < grid.size and 0 <= position[1] < grid.size
 
     def getMove(self, grid):
+        best_move = -1
         # iterative_deepening with time limitation
         self.time_limit = time.time() + 0.98
-        best_move = -1
+
         depth = 4
         while time.time() < self.time_limit:
             move_score = self.search(grid, -infinity, infinity, depth, True)
@@ -61,10 +80,20 @@ class PlayerAI(BaseAI):
                 break
             best_move = move_score.direction
             depth += 1
-            
+
         if best_move is -1:
             raise Exception("No move is provided!")
         return best_move
+
+    def update_max_tile(self, grid):
+        if self.current_max_tile >= self.threshold:
+            return
+        else:
+            for x in [0, 1, 2, 3]:
+                for y in [0, 1, 2, 3]:
+                    if grid.map[x][y] >= self.threshold:
+                        self.current_max_tile = grid.map[x][y]
+                        return
 
     def search(self, grid, alpha, beta, depth, player):
         # check the depth
@@ -146,6 +175,10 @@ class PlayerAI(BaseAI):
         return MoveScore(-1, v)
 
     def eval(self, grid):
+        return self.weight_score(grid)
+        # return self.snake_weight_score(grid)
+
+    def weight_score(self, grid):
         max_score = None
         for weight_matrix in self.gradients:
             score = 0.0
@@ -155,6 +188,30 @@ class PlayerAI(BaseAI):
             if score > max_score:
                 max_score = score
         return max_score
+
+    def snake_weight_score(self, grid):
+        max_score = None
+        for snake in self.snakes:
+            score = 0
+            for x in range(4):
+                for y in range(4):
+                    # use left shift
+                    score += grid.map[x][y] << snake[x][y]
+            if score > max_score:
+                max_score = score
+        return max_score
+
+    def one_move_direction(self, grid):
+        best = -1
+        best_score = None
+        for direction in range(4):
+            new_grid = grid.clone()
+            new_grid.move(direction)
+            score = self.eval(new_grid)
+            if score > best_score:
+                best_score = score
+                best = direction
+        return best
 
 
 class MoveScore:
