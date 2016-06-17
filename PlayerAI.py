@@ -4,6 +4,7 @@
 from BaseAI import BaseAI
 import Grid
 import time
+import math
 
 infinity = 1.0e400
 
@@ -16,36 +17,43 @@ class PlayerAI(BaseAI):
         self.threshold = 256
         self.snakes = [[[15, 14, 13, 12],
                        [8, 9, 10, 11],
-                       [4, 5, 6, 7],
-                       [3, 2, 1, 0]],
+                       [7, 6, 5, 4],
+                       [0, 1, 2, 3]],
+
+                       [[15, 8, 7, 0],
+                        [14, 9, 6, 1],
+                        [13, 10, 5, 2],
+                        [12, 11, 4, 3]],
+
                        [[12, 13, 14, 15],
                        [11, 10, 9, 8],
                        [4, 5, 6, 7],
                        [3, 2, 1, 0]],
-                       [[3, 4, 8, 15],
-                       [2, 5, 9, 14],
-                       [1, 6, 10, 13],
-                       [0, 7, 11, 12]],
+
+                       [[0, 7, 8, 15],
+                       [1, 6, 9, 14],
+                       [2, 5, 10, 13],
+                       [3, 4, 11, 12]],
+
                        [[3, 4, 11, 12],
                        [2, 5, 10, 13],
                        [1, 6, 9, 14],
                        [0, 7, 8, 15]],
+
+                       [[3, 2, 1, 0],
+                        [4, 5, 6, 7],
+                        [11, 10, 9, 8],
+                        [12, 13, 14, 15]],
+
                        [[0, 1, 2, 3],
                        [7, 6, 5, 4],
                        [8, 9, 10, 11],
                        [15, 14, 13, 12]],
-                       [[0, 1, 2, 3],
-                       [7, 6, 5, 4],
-                       [11, 10, 9, 8],
-                       [12, 13, 14, 15]],
-                       [[12, 11, 7, 0],
-                       [13, 10, 6, 1],
-                       [14, 9, 5, 2],
-                       [15, 8, 4, 3]],
-                       [[15, 8, 7, 0],
-                       [14, 9, 6, 1],
+
+                       [[12, 11, 4, 3],
                        [13, 10, 5, 2],
-                       [12, 11, 4, 3]]]
+                       [14, 9, 6, 1],
+                       [15, 8, 7, 0]]]
 
     @staticmethod
     def get_available_grid_cells(grid):
@@ -175,8 +183,8 @@ class PlayerAI(BaseAI):
         return MoveScore(-1, v)
 
     def eval(self, grid):
-        return self.weight_score(grid)
-        # return self.snake_weight_score(grid)
+        # return self.weight_score(grid)
+        return self.snake_weight_score(grid)
 
     def weight_score(self, grid):
         max_score = None
